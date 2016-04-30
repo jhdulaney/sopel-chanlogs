@@ -13,6 +13,7 @@ import os.path
 import re
 import threading
 import sys
+import fileinput
 from datetime import datetime
 try:
     from pytz import timezone
@@ -60,7 +61,19 @@ def configure(config):
         'dir',
         'Path to channel log storage directory',
     )
-    
+    config.chanlogs.configure_setting(
+        'html',
+        'Set to true to generate html logs'
+    }
+    config.chanlogs.configure_setting(
+        'html-header',
+        'Path to header section for html logs'
+    )
+    config.chanlogs.configure_setting(
+        'html-footer',
+        'Path to footer section for html logs'
+    )
+
 
 def get_datetime(bot):
     """
@@ -136,8 +149,28 @@ def log_message(bot, message):
     logline = _format_template(tpl, bot, message, message=message)
     fpath = get_fpath(bot, message)
     with bot.memory['chanlog_locks'][fpath]:
-        with open(fpath, "ab") as f:
-            f.write(logline.encode('utf8'))
+        if bot.config.chanlogs.html == 'true':
+            if os.path.exists(fpath):
+                for line in fileinput.FileInput(fpath, inplace=1):
+                    if '<!-- End of log -->' in line:
+                        line = line.replace(line, '  <br>\n    ' + logline + '\n  </br>\n' + line)
+            else:
+                try:
+                    with open(bot.config.chanlogs.html-header, 'r') as f):
+                        header = f.read()
+                    with open(bot.config.chanlogs.html-footer, 'r') as f):
+                        footer = '\n\n  <!-- End of log -->\n' + f.read()
+                except IOError:
+                    print('Could not open header or footer')
+                    sys.exit()
+
+                log_file = header + '\n' + logline + footer
+                with open(fpath, 'ab') as f:
+                    f.write(log_file.encode('utf8'))
+        else:
+            with open(fpath, "ab") as f:
+                f.write(logline.encode('utf8'))
+
 
 
 @sopel.module.rule('.*')
